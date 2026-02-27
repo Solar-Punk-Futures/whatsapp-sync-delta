@@ -27,7 +27,11 @@ function saveCheckpoints(map: ChatCheckpointMap) {
 }
 
 function normalizeTimestamp(raw: string): string {
-  return raw.replace(/\u202f/g, ' ').trim()
+  return raw.replace(/[\u200e\u200f\u200b\u200c\u200d\uFEFF]/g, '').replace(/\u202f/g, ' ').trim()
+}
+
+function stripInvisible(line: string): string {
+  return line.replace(/^[\u200e\u200f\u200b\u200c\u200d\uFEFF]+/, '')
 }
 
 function parseWhatsappDate(raw: string): Date | null {
@@ -77,7 +81,7 @@ function parseWhatsappText(content: string): ParsedMessage[] {
   }
 
   for (const line of lines) {
-    const match = line.match(header)
+    const match = stripInvisible(line).match(header)
     if (match) {
       pushCurrent()
       current = {
