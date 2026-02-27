@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { ExportDiffViewer } from '../components/export-diff-viewer'
 import type { Message, MediaAttachment, ExportSummary } from '../components/export-diff-viewer/types'
 import { parseWhatsappText, parseCheckpointOverride, parseDateTimeLocalInput, toDatetimeLocalValue, type ParsedMessage } from '../parsers'
@@ -69,7 +69,7 @@ export function ExportPage() {
   const [textOverride, setTextOverride] = useState('')
 
   // Store the auto-detected checkpoint so overrides can replace it
-  const autoCheckpointRef = useRef<Date | null>(null)
+  const [autoCheckpoint, setAutoCheckpoint] = useState<Date | null>(null)
 
   const parsedPickerDate = useMemo(() => {
     if (!datePickerValue) return null
@@ -85,8 +85,8 @@ export function ExportPage() {
   const effectiveCutoff = useMemo(() => {
     if (textOverride) return parsedTextDate
     if (datePickerValue) return parsedPickerDate
-    return autoCheckpointRef.current
-  }, [textOverride, parsedTextDate, datePickerValue, parsedPickerDate])
+    return autoCheckpoint
+  }, [textOverride, parsedTextDate, datePickerValue, parsedPickerDate, autoCheckpoint])
 
   // Re-split messages whenever cutoff changes
   const { newMsgs, prevMsgs } = useMemo(
@@ -135,7 +135,7 @@ export function ExportPage() {
     ? 'text override'
     : datePickerValue
       ? 'picker override'
-      : autoCheckpointRef.current
+      : autoCheckpoint
         ? 'stored checkpoint'
         : null
 
@@ -151,7 +151,7 @@ export function ExportPage() {
       const parsed = parseWhatsappText(text)
       if (parsed.length === 0) {
         setAllMessages([])
-        autoCheckpointRef.current = null
+        setAutoCheckpoint(null)
         return
       }
 
@@ -172,7 +172,7 @@ export function ExportPage() {
           checkpoint = getCheckpointDate(checkpoints, group.name)
         }
       }
-      autoCheckpointRef.current = checkpoint
+      setAutoCheckpoint(checkpoint)
 
       setAllParsed(sorted)
       setAllMessages(sorted.map(parsedToMessage))
@@ -200,7 +200,7 @@ export function ExportPage() {
     }
 
     setGroups(loadGroups())
-    autoCheckpointRef.current = new Date(syncedAt)
+    setAutoCheckpoint(new Date(syncedAt))
     setDatePickerValue('')
     setTextOverride('')
   }, [selectedGroupId, newMsgs, groups])
