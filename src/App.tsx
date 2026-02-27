@@ -99,6 +99,22 @@ function toDatetimeLocalValue(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
+function parseDateTimeLocalInput(value: string): Date | null {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/)
+  if (!match) return null
+
+  const [, year, month, day, hour, minute] = match
+  const date = new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    0,
+  )
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
 function extractAttachmentNames(text: string): string[] {
   const matches = text.matchAll(/<attached:\s*([^>]+)>/gi)
   const names: string[] = []
@@ -117,14 +133,24 @@ function App() {
   const [lastSyncedAtInput, setLastSyncedAtInput] = useState('')
   const [status, setStatus] = useState('')
 
-  const lastSyncedAt = useMemo(() => {
-    const fromInput = lastSyncedAtInput ? new Date(lastSyncedAtInput) : null
-    if (fromInput && !Number.isNaN(fromInput.getTime())) return fromInput
+  const parsedInputDate = useMemo(() => {
+    if (!lastSyncedAtInput) return null
+    return parseDateTimeLocalInput(lastSyncedAtInput)
+  }, [lastSyncedAtInput])
+
+  const hasInvalidInputDate = Boolean(lastSyncedAtInput) && !parsedInputDate
+
+  const storedCheckpointDate = useMemo(() => {
     const fromStore = checkpoints[chatName]
     if (!fromStore) return null
     const d = new Date(fromStore)
     return Number.isNaN(d.getTime()) ? null : d
-  }, [chatName, checkpoints, lastSyncedAtInput])
+  }, [chatName, checkpoints])
+
+  const lastSyncedAt = useMemo(() => {
+    if (lastSyncedAtInput) return parsedInputDate
+    return storedCheckpointDate
+  }, [lastSyncedAtInput, parsedInputDate, storedCheckpointDate])
 
   const freshMessages = useMemo(() => {
     const deduped = new Map<string, ParsedMessage>()
@@ -216,6 +242,10 @@ function App() {
           />
         </label>
 
+        {hasInvalidInputDate && (
+          <p className="status">Invalid override date format. Please use the datetime picker value.</p>
+        )}
+
         <div className="row">
           <button onClick={copyFresh}>Copy fresh messages</button>
           <button onClick={persistCheckpoint}>Mark synced up to current point</button>
@@ -225,8 +255,11 @@ function App() {
           <span>Total parsed: {messages.length}</span>
           <span>Fresh messages: {freshMessages.length}</span>
           <span>Fresh attachments: {freshAttachments.length}</span>
-          <span>Stored checkpoint: {checkpoints[chatName] ? new Date(checkpoints[chatName]).toLocaleString() : 'none'}</span>
-          <span>Active cutoff: {lastSyncedAt ? toDatetimeLocalValue(lastSyncedAt) : 'none'}</span>
+          <span>Stored checkpoint: {storedCheckpointDate ? storedCheckpointDate.toLocaleString() : 'none'}</span>
+          <span>
+            Active cutoff: {lastSyncedAt ? toDatetimeLocalValue(lastSyncedAt) : 'none'}
+            {lastSyncedAtInput ? ' (from override input)' : ' (from stored checkpoint)'}
+          </span>
         </div>
 
         {status && <p className="status">{status}</p>}
