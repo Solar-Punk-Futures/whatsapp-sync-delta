@@ -99,6 +99,16 @@ function toDatetimeLocalValue(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
+function extractAttachmentNames(text: string): string[] {
+  const matches = text.matchAll(/<attached:\s*([^>]+)>/gi)
+  const names: string[] = []
+  for (const match of matches) {
+    const fileName = (match[1] ?? '').trim()
+    if (fileName) names.push(fileName)
+  }
+  return names
+}
+
 function App() {
   const [chatName, setChatName] = useState('ACME x SPF Aadi Villa')
   const [rawText, setRawText] = useState('')
@@ -131,6 +141,16 @@ function App() {
       .join('\n')
   }, [freshMessages])
 
+  const freshAttachments = useMemo(() => {
+    const deduped = new Set<string>()
+    for (const msg of freshMessages) {
+      for (const fileName of extractAttachmentNames(msg.text)) deduped.add(fileName)
+    }
+    return [...deduped]
+  }, [freshMessages])
+
+  const freshAttachmentsText = useMemo(() => freshAttachments.join('\n'), [freshAttachments])
+
   const onUpload = async (file: File | null) => {
     if (!file) return
     const text = await file.text()
@@ -160,6 +180,15 @@ function App() {
     }
     await navigator.clipboard.writeText(freshText)
     setStatus(`Copied ${freshMessages.length} fresh messages.`)
+  }
+
+  const copyFreshAttachments = async () => {
+    if (!freshAttachmentsText.trim()) {
+      setStatus('No fresh attachments to copy.')
+      return
+    }
+    await navigator.clipboard.writeText(freshAttachmentsText)
+    setStatus(`Copied ${freshAttachments.length} attachment filenames.`)
   }
 
   return (
@@ -194,7 +223,8 @@ function App() {
 
         <div className="stats">
           <span>Total parsed: {messages.length}</span>
-          <span>Fresh: {freshMessages.length}</span>
+          <span>Fresh messages: {freshMessages.length}</span>
+          <span>Fresh attachments: {freshAttachments.length}</span>
           <span>Stored checkpoint: {checkpoints[chatName] ? new Date(checkpoints[chatName]).toLocaleString() : 'none'}</span>
           <span>Active cutoff: {lastSyncedAt ? toDatetimeLocalValue(lastSyncedAt) : 'none'}</span>
         </div>
@@ -205,6 +235,19 @@ function App() {
       <section className="card">
         <h2>Fresh messages</h2>
         <textarea readOnly value={freshText} rows={14} />
+      </section>
+
+      <section className="card">
+        <h2>Fresh attachment files</h2>
+        <div className="row">
+          <button onClick={copyFreshAttachments}>Copy attachment filenames</button>
+        </div>
+        <textarea
+          readOnly
+          value={freshAttachmentsText}
+          rows={Math.max(6, Math.min(14, freshAttachments.length + 2))}
+          placeholder="No attachment tags found in fresh messages."
+        />
       </section>
 
       <section className="card">
