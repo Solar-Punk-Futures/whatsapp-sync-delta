@@ -119,6 +119,18 @@ function parseDateTimeLocalInput(value: string): Date | null {
   return Number.isNaN(date.getTime()) ? null : date
 }
 
+function parseCheckpointOverride(raw: string): Date | null {
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+
+  const unwrapped = trimmed.match(/^\[(.*)\]$/)?.[1]?.trim() ?? trimmed
+
+  const whatsappDate = parseWhatsappDate(unwrapped)
+  if (whatsappDate) return whatsappDate
+
+  return parseDateTimeLocalInput(trimmed)
+}
+
 function extractAttachmentNames(text: string): string[] {
   const matches = text.matchAll(/<attached:\s*([^>]+)>/gi)
   const names: string[] = []
@@ -135,6 +147,7 @@ function App() {
   const [messages, setMessages] = useState<ParsedMessage[]>([])
   const [checkpoints, setCheckpoints] = useState<ChatCheckpointMap>(() => loadCheckpoints())
   const [lastSyncedAtInput, setLastSyncedAtInput] = useState('')
+  const [lastSyncedAtTextInput, setLastSyncedAtTextInput] = useState('')
   const [status, setStatus] = useState('')
 
   const parsedInputDate = useMemo(() => {
@@ -142,7 +155,13 @@ function App() {
     return parseDateTimeLocalInput(lastSyncedAtInput)
   }, [lastSyncedAtInput])
 
+  const parsedTextInputDate = useMemo(() => {
+    if (!lastSyncedAtTextInput) return null
+    return parseCheckpointOverride(lastSyncedAtTextInput)
+  }, [lastSyncedAtTextInput])
+
   const hasInvalidInputDate = Boolean(lastSyncedAtInput) && !parsedInputDate
+  const hasInvalidTextInputDate = Boolean(lastSyncedAtTextInput) && !parsedTextInputDate
 
   const storedCheckpointDate = useMemo(() => {
     const fromStore = checkpoints[chatName]
@@ -152,9 +171,10 @@ function App() {
   }, [chatName, checkpoints])
 
   const lastSyncedAt = useMemo(() => {
+    if (lastSyncedAtTextInput) return parsedTextInputDate
     if (lastSyncedAtInput) return parsedInputDate
     return storedCheckpointDate
-  }, [lastSyncedAtInput, parsedInputDate, storedCheckpointDate])
+  }, [lastSyncedAtTextInput, parsedTextInputDate, lastSyncedAtInput, parsedInputDate, storedCheckpointDate])
 
   const freshMessages = useMemo(() => {
     const deduped = new Map<string, ParsedMessage>()
@@ -200,6 +220,7 @@ function App() {
     setCheckpoints(updated)
     saveCheckpoints(updated)
     setLastSyncedAtInput('')
+    setLastSyncedAtTextInput('')
     setStatus(`Saved checkpoint for "${chatName}" at ${target.toLocaleString()}`)
   }
 
@@ -246,8 +267,22 @@ function App() {
           />
         </label>
 
+        <label>
+          Or paste a WhatsApp timestamp (optional override)
+          <input
+            type="text"
+            value={lastSyncedAtTextInput}
+            onChange={(e) => setLastSyncedAtTextInput(e.target.value)}
+            placeholder="[25/02/26, 7:03:37 PM]"
+          />
+        </label>
+
         {hasInvalidInputDate && (
-          <p className="status">Invalid override date format. Please use the datetime picker value.</p>
+          <p className="status">Invalid picker override date format.</p>
+        )}
+
+        {hasInvalidTextInputDate && (
+          <p className="status">Invalid text override. Use format like [25/02/26, 7:03:37 PM].</p>
         )}
 
         <div className="row">
@@ -262,7 +297,11 @@ function App() {
           <span>Stored checkpoint: {storedCheckpointDate ? storedCheckpointDate.toLocaleString() : 'none'}</span>
           <span>
             Active cutoff: {lastSyncedAt ? toDatetimeLocalValue(lastSyncedAt) : 'none'}
-            {lastSyncedAtInput ? ' (from override input)' : ' (from stored checkpoint)'}
+            {lastSyncedAtTextInput
+              ? ' (from text override)'
+              : lastSyncedAtInput
+                ? ' (from picker override)'
+                : ' (from stored checkpoint)'}
           </span>
         </div>
 
