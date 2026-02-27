@@ -7,11 +7,11 @@ export type ParsedMessage = {
 }
 
 export function normalizeTimestamp(raw: string): string {
-  return raw.replace(/[\u200e\u200f\u200b\u200c\u200d\uFEFF]/g, '').replace(/\u202f/g, ' ').trim()
+  return raw.replace(/(?:\u200e|\u200f|\u200b|\u200c|\u200d|\uFEFF)/g, '').replace(/\u202f/g, ' ').trim()
 }
 
 function stripInvisible(line: string): string {
-  return line.replace(/^[\u200e\u200f\u200b\u200c\u200d\uFEFF]+/, '')
+  return line.replace(/^(?:\u200e|\u200f|\u200b|\u200c|\u200d|\uFEFF)+/, '')
 }
 
 export function parseWhatsappDate(raw: string): Date | null {
