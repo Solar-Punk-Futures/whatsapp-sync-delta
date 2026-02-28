@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseCheckpointOverride, parseDateTimeLocalInput, parseWhatsappDate } from './parsers'
+import { parseCheckpointOverride, parseDateTimeLocalInput, parseWhatsappDate, parseWhatsappText } from './parsers'
 
 describe('parseWhatsappDate', () => {
   it('parses whatsapp timestamp with PM correctly', () => {
@@ -48,5 +48,21 @@ describe('parseCheckpointOverride', () => {
 
   it('returns null for junk input', () => {
     expect(parseCheckpointOverride('potato')).toBeNull()
+  })
+})
+
+
+describe('parseWhatsappText', () => {
+  it('parses Android-style exports using dash separators', () => {
+    const text = [
+      '25/02/26, 7:03 PM - Josh: First',
+      '25/02/26, 7:04 PM - Helio: Second line 1',
+      'second line 2',
+    ].join('\n')
+
+    const parsed = parseWhatsappText(text)
+    expect(parsed).toHaveLength(2)
+    expect(parsed[0].sender).toBe('Josh')
+    expect(parsed[1].text).toContain('second line 2')
   })
 })

@@ -16,7 +16,7 @@ function stripInvisible(line: string): string {
 
 export function parseWhatsappDate(raw: string): Date | null {
   const cleaned = normalizeTimestamp(raw)
-  const match = cleaned.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}),\s*(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)$/i)
+  const match = cleaned.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}),\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i)
   if (!match) return null
 
   const [, dd, mm, yy, hh, min, sec, ampm] = match
@@ -25,19 +25,44 @@ export function parseWhatsappDate(raw: string): Date | null {
   const day = Number(dd)
   let hour = Number(hh)
   const minute = Number(min)
-  const second = Number(sec)
+  const second = Number(sec ?? '0')
 
-  const upper = ampm.toUpperCase()
-  if (upper === 'PM' && hour !== 12) hour += 12
-  if (upper === 'AM' && hour === 12) hour = 0
+  if (ampm) {
+    const upper = ampm.toUpperCase()
+    if (upper === 'PM' && hour !== 12) hour += 12
+    if (upper === 'AM' && hour === 12) hour = 0
+  }
 
   const date = new Date(year, month, day, hour, minute, second)
   return Number.isNaN(date.getTime()) ? null : date
 }
 
+function parseMessageHeader(line: string): { tsRaw: string; sender: string; text: string } | null {
+  // iOS style: [25/02/26, 7:03:37 PM] Name: text
+  const bracketed = line.match(/^\[(\d{1,2}\/\d{1,2}\/\d{2},\s*\d{1,2}:\d{2}(?::\d{2})?\s*[AP]M?)\]\s([^:]+):\s?(.*)$/i)
+  if (bracketed) {
+    return {
+      tsRaw: bracketed[1],
+      sender: bracketed[2],
+      text: bracketed[3] ?? '',
+    }
+  }
+
+  // Android style: 25/02/26, 7:03 PM - Name: text
+  const dashed = line.match(/^(\d{1,2}\/\d{1,2}\/\d{2},\s*\d{1,2}:\d{2}(?::\d{2})?\s*[AP]M?)\s-\s([^:]+):\s?(.*)$/i)
+  if (dashed) {
+    return {
+      tsRaw: dashed[1],
+      sender: dashed[2],
+      text: dashed[3] ?? '',
+    }
+  }
+
+  return null
+}
+
 export function parseWhatsappText(content: string): ParsedMessage[] {
   const lines = content.split(/\r?\n/)
-  const header = /^\[(\d{1,2}\/\d{1,2}\/\d{2},\s*\d{1,2}:\d{2}:\d{2}\s*[AP]M)\]\s([^:]+):\s?(.*)$/
 
   const messages: ParsedMessage[] = []
   let current: { tsRaw: string; sender: string; text: string } | null = null
@@ -61,14 +86,10 @@ export function parseWhatsappText(content: string): ParsedMessage[] {
   }
 
   for (const line of lines) {
-    const match = stripInvisible(line).match(header)
-    if (match) {
+    const header = parseMessageHeader(stripInvisible(line))
+    if (header) {
       pushCurrent()
-      current = {
-        tsRaw: match[1],
-        sender: match[2],
-        text: match[3] ?? '',
-      }
+      current = header
     } else if (current) {
       current.text += `\n${line}`
     }
